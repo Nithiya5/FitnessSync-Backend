@@ -51,17 +51,35 @@ if (!trainer.uuid || trainer.uuid !== user.uuid) {
 // @desc    Get trainer profile by user's UUID
 const getTrainerProfile = async (req, res) => {
   try {
-    const user = await User.findOne({ uuid: req.user.uuid });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const user = await User.findOne({ uuid: req.user.uuid }).select('name email');
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const trainer = await Trainer.findOne({ user: user._id }).select('bio expertise socialLinks');
+    const trainer = await Trainer.findOne({ user: user._id }).select('bio uuid followers');
+    if (!trainer) return res.status(404).json({ message: 'Trainer profile not found' });
 
-    if (!trainer) return res.status(404).json({ message: "Trainer profile not found" });
+    const [videos, workouts, dietPlans] = await Promise.all([
+      Video.find({ trainerUuid: trainer.uuid }).select('title videoUrl thumbnailUrl'),
+      Workout.find({ trainerUuid: trainer.uuid }).select('title imageUrl description'),
+      DietPlan.find({ trainerUuid: trainer.uuid }).select('title imageUrl meals'),
+    ]);
 
-    res.status(200).json(trainer);
+    return res.status(200).json({
+      user,
+      bio: trainer.bio,
+      counts: {
+        videos: videos.length,
+        workouts: workouts.length,
+        dietPlans: dietPlans.length,
+        followers: trainer.followers.length,
+      },
+      videos,
+      workouts,
+      dietPlans,
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error('Error loading dashboard:', error.message);
+    res.status(500).json({ message: 'Server error loading trainer dashboard' });
   }
 };
 const updateTrainerProfile = async (req, res) => {
